@@ -4,13 +4,16 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
 from django.utils.timezone import now
+
 from .models import Emergency
 from .serializers import EmergencySerializer
-from rest_framework.exceptions import PermissionDenied
+from .permissions import IsCitizen, IsVolunteer, IsAuthority
+
+
 class EmergencyViewSet(ModelViewSet):
     serializer_class = EmergencySerializer
     permission_classes = [IsAuthenticated]
-
+    
     def get_queryset(self):
         user = self.request.user
 
@@ -30,17 +33,16 @@ class EmergencyViewSet(ModelViewSet):
 
         return Emergency.objects.none()
 
+
     def perform_create(self, serializer):
         if self.request.user.role != 'citizen':
+            from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Only citizens can create emergencies")
 
         serializer.save(user=self.request.user)
-    
-    @action(detail=True, methods=['post'])
-    def assign(self, request, pk=None):
-        if request.user.role != 'volunteer':
-            return Response({"error": "Only volunteers allowed"}, status=403)
 
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsVolunteer])
+    def assign(self, request, pk=None):
         try:
             with transaction.atomic():
                 emergency = Emergency.objects.select_for_update().get(pk=pk)
@@ -61,12 +63,9 @@ class EmergencyViewSet(ModelViewSet):
         except Emergency.DoesNotExist:
             return Response({"error": "Not found"}, status=404)
 
-    # 🔴 UPDATE STATUS
-    @action(detail=True, methods=['patch'])
+   
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated, IsAuthority])
     def update_status(self, request, pk=None):
-        if request.user.role != 'authority':
-            return Response({"error": "Only authority allowed"}, status=403)
-
         try:
             emergency = Emergency.objects.get(pk=pk)
         except Emergency.DoesNotExist:

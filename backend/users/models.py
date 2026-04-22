@@ -12,8 +12,10 @@ class User(AbstractUser):
     role = models.CharField(
         max_length=20,
         choices=ROLE_CHOICES,
-        default='citizen'
+        blank=True,
+        null=True
     )
+    is_role_set = models.BooleanField(default=False)
 
     phone = models.CharField(max_length=15, blank=True)
 
